@@ -1,0 +1,7 @@
+# Ocultamos archivos internos – exportamos solo lo necesario
+from .keywords import POSITIVE, NEGATIVE, EXPLICIT
+from .scoring import WEIGHTS, PROXIMITY, SURFACE
+from .provinces import ANDALUCIA, CATALUNA, VALENCIA
+from .matcher import MATCH_THRESHOLD
+
+__all__ = ["POSITIVE", "NEGATIVE", "EXPLICIT", "WEIGHTS", "PROXIMITY", "SURFACE", "ANDALUCIA", "CATALUNA", "VALENCIA", "MATCH_THRESHOLD"]

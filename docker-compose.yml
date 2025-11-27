@@ -1,31 +1,72 @@
-services:
-  sipi-etl:
-    build: .
-    container_name: sipi-etl-service
-    environment:
-      - DB_CONN_STRING=postgresql://sipi:sipi@db:5432/sipi
-    command: ["python", "-m", "src.main", "--daemon", "--interval=24"]
-    volumes:
-      - ./data:/app/data
-    depends_on:
-      db:
-        condition: service_healthy
+version: '3.8'
 
-  db:
+services:
+  # PostgreSQL con PostGIS
+  postgres:
     image: postgis/postgis:15-3.3
-    container_name: sipi-db
     environment:
       POSTGRES_DB: sipi
-      POSTGRES_USER: sipi
-      POSTGRES_PASSWORD: sipi
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+      POSTGRES_USER: sipi_user
+      POSTGRES_PASSWORD: sipi_password
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sipi"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U sipi_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Backend (FastAPI)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://sipi_user:sipi_password@postgres:5432/sipi
+      REDIS_URL: redis://redis:6379
+      ENABLE_GOOGLE_GEOCODING: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./src:/app/src
+      - ./checkpoints:/app/checkpoints
+      - ./logs:/app/logs
+
+  # Frontend (Vue 3)
+  frontend:
+    build:
+      context: ./sipi-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: http://localhost:8000
+      VITE_WS_URL: ws://localhost:8000
+    depends_on:
+      - backend
 
 volumes:
-  pg_data:
+  postgres_data:
+  redis_data:
